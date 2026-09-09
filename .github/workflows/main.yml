@@ -60,3 +60,18 @@ jobs:
       working-directory: tests
       run: |
         make -f makefile_bench TIMING=1
+    - name: ASan/UBSan (scratch, not for merge)
+      working-directory: src
+      run: |
+        source /opt/rh/gcc-toolset-14/enable
+        export OPENBLAS_NUM_THREADS=1 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 ASAN_OPTIONS=detect_leaks=1
+        SAN="-fsanitize=address,undefined -fno-omit-frame-pointer -g -O1 -std=gnu11 -I. -I/usr/include/openblas"
+        gcc $SAN -o /tmp/san_test ../tests/test_poisson_fast.c poisson_fast.c poisson_solver.c gradient.c ../test_data/constants.c -lm -lopenblas
+        /tmp/san_test
+        gcc $SAN -DEXPECT_INVALID -o /tmp/san_invalid ../tests/test_poisson_fast.c poisson_fast.c poisson_solver.c gradient.c ../test_data/constants_poisson_invalid.c -lm -lopenblas
+        /tmp/san_invalid
+        cd ../tests/rtgsfit_verify_analytic && source .venv/bin/activate && python -m rtgsfit_verify_analytic.export_bench_inputs && cd ../../src
+        gcc $SAN -o /tmp/san_bench ../tests/rtgsfit_bench.c rtgsfit.c poisson_fast.c poisson_solver.c gradient.c find_x_point.c find_plasma.c ../tests/rtgsfit_verify_analytic/data/constants.c -lm -lopenblas
+        mkdir -p /tmp/san_out
+        /tmp/san_bench ../tests/rtgsfit_verify_analytic/data/bench 10 20 /tmp/san_out
+        /tmp/san_bench ../tests/rtgsfit_verify_analytic/data/bench_zero 10 5 /tmp/san_out
